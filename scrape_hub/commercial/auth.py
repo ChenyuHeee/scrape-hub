@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-import sqlite3
 
 import streamlit as st
 
-from scrape_hub.commercial.database import get_db
+from scrape_hub.commercial.database import get_supabase
 
 
 def _hash_password(password: str, salt: str) -> str:
@@ -29,28 +28,31 @@ def register_user(username: str, password: str) -> tuple[bool, str]:
     salt = secrets.token_hex(16)
     pw_hash = _hash_password(password, salt)
 
-    with get_db() as db:
-        try:
-            db.execute(
-                "INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)",
-                (username, pw_hash, salt),
-            )
-            return True, "注册成功！"
-        except sqlite3.IntegrityError:
-            return False, "用户名已存在"
+    sb = get_supabase()
+    # Check if username exists
+    existing = sb.table("users").select("id").eq("username", username).execute()
+    if existing.data:
+        return False, "用户名已存在"
+
+    sb.table("users").insert({
+        "username": username,
+        "password_hash": pw_hash,
+        "salt": salt,
+    }).execute()
+    return True, "注册成功！"
 
 
 def login_user(username: str, password: str) -> tuple[bool, str]:
     """Verify credentials and set session. Returns (success, message)."""
-    with get_db() as db:
-        row = db.execute(
-            "SELECT id, password_hash, salt, tier FROM users WHERE username = ?",
-            (username.strip(),),
-        ).fetchone()
+    sb = get_supabase()
+    result = sb.table("users").select("id, password_hash, salt, tier").eq(
+        "username", username.strip()
+    ).execute()
 
-    if not row:
+    if not result.data:
         return False, "用户名或密码错误"
 
+    row = result.data[0]
     pw_hash = _hash_password(password, row["salt"])
     if pw_hash != row["password_hash"]:
         return False, "用户名或密码错误"

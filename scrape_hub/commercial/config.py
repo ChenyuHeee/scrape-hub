@@ -3,12 +3,6 @@
 Replace placeholder values with your own before deploying.
 """
 
-from pathlib import Path
-
-# ── Database ────────────────────────────────────────────────
-
-DB_PATH = Path("data/scrape_hub.db")
-
 # ── User Tiers ──────────────────────────────────────────────
 
 TIERS = {

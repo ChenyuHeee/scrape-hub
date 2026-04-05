@@ -1,60 +1,35 @@
-"""SQLite database for user management and usage tracking."""
+"""Supabase database for user management and usage tracking."""
 
 from __future__ import annotations
 
-import sqlite3
-import threading
-from contextlib import contextmanager
+import os
+from functools import lru_cache
 
-from scrape_hub.commercial.config import DB_PATH
+import streamlit as st
 
-_local = threading.local()
-
-
-def _get_connection() -> sqlite3.Connection:
-    """Get a thread-local database connection."""
-    if not hasattr(_local, "conn") or _local.conn is None:
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _local.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
-        _local.conn.row_factory = sqlite3.Row
-        _local.conn.execute("PRAGMA journal_mode=WAL")
-        _init_schema(_local.conn)
-    return _local.conn
+try:
+    from supabase import create_client, Client
+except ImportError:
+    create_client = None  # type: ignore
+    Client = None  # type: ignore
 
 
-def _init_schema(conn: sqlite3.Connection):
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            tier TEXT NOT NULL DEFAULT 'free',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS usage_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            action TEXT NOT NULL,
-            platform TEXT,
-            detail TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_usage_user_action_date
-            ON usage_log(user_id, action, created_at);
-    """)
-
-
-@contextmanager
-def get_db():
-    """Context manager for database transactions."""
-    conn = _get_connection()
+def _secret(key: str) -> str:
+    """Read from Streamlit secrets, then environment."""
     try:
-        yield conn
-        conn.commit()
+        val = st.secrets.get(key, "")
     except Exception:
-        conn.rollback()
-        raise
+        val = ""
+    return val or os.environ.get(key, "")
+
+
+@lru_cache(maxsize=1)
+def get_supabase() -> "Client":
+    """Return a cached Supabase client."""
+    if create_client is None:
+        raise RuntimeError("请安装 supabase: pip install supabase")
+    url = _secret("SUPABASE_URL")
+    key = _secret("SUPABASE_KEY")
+    if not url or not key:
+        raise RuntimeError("请在 secrets 中配置 SUPABASE_URL 和 SUPABASE_KEY")
+    return create_client(url, key)

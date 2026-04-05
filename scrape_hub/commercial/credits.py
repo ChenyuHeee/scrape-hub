@@ -7,7 +7,7 @@ from datetime import date
 import streamlit as st
 
 from scrape_hub.commercial.config import TIERS
-from scrape_hub.commercial.database import get_db
+from scrape_hub.commercial.database import get_supabase
 
 
 def get_tier_config(tier: str | None = None) -> dict:
@@ -18,13 +18,17 @@ def get_tier_config(tier: str | None = None) -> dict:
 
 def _count_today(user_id: int, action: str) -> int:
     today = date.today().isoformat()
-    with get_db() as db:
-        row = db.execute(
-            "SELECT COUNT(*) as cnt FROM usage_log "
-            "WHERE user_id = ? AND action = ? AND date(created_at) = ?",
-            (user_id, action, today),
-        ).fetchone()
-    return row["cnt"] if row else 0
+    sb = get_supabase()
+    result = (
+        sb.table("usage_log")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .eq("action", action)
+        .gte("created_at", f"{today}T00:00:00")
+        .lt("created_at", f"{today}T23:59:59.999999")
+        .execute()
+    )
+    return result.count or 0
 
 
 def log_usage(action: str, platform: str = "", detail: str = ""):
@@ -32,12 +36,13 @@ def log_usage(action: str, platform: str = "", detail: str = ""):
     user_id = st.session_state.get("user_id")
     if not user_id:
         return
-    with get_db() as db:
-        db.execute(
-            "INSERT INTO usage_log (user_id, action, platform, detail) "
-            "VALUES (?, ?, ?, ?)",
-            (user_id, action, platform, detail),
-        )
+    sb = get_supabase()
+    sb.table("usage_log").insert({
+        "user_id": user_id,
+        "action": action,
+        "platform": platform,
+        "detail": detail,
+    }).execute()
 
 
 def can_search() -> tuple[bool, str]:
@@ -96,24 +101,35 @@ def get_usage_stats() -> dict:
         return {}
 
     today = date.today().isoformat()
-    with get_db() as db:
-        searches_today = db.execute(
-            "SELECT COUNT(*) as cnt FROM usage_log "
-            "WHERE user_id = ? AND action = 'search' AND date(created_at) = ?",
-            (user_id, today),
-        ).fetchone()["cnt"]
+    sb = get_supabase()
 
-        downloads_today = db.execute(
-            "SELECT COUNT(*) as cnt FROM usage_log "
-            "WHERE user_id = ? AND action = 'download' AND date(created_at) = ?",
-            (user_id, today),
-        ).fetchone()["cnt"]
+    searches_today = (
+        sb.table("usage_log")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .eq("action", "search")
+        .gte("created_at", f"{today}T00:00:00")
+        .lt("created_at", f"{today}T23:59:59.999999")
+        .execute()
+    ).count or 0
 
-        total_searches = db.execute(
-            "SELECT COUNT(*) as cnt FROM usage_log "
-            "WHERE user_id = ? AND action = 'search'",
-            (user_id,),
-        ).fetchone()["cnt"]
+    downloads_today = (
+        sb.table("usage_log")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .eq("action", "download")
+        .gte("created_at", f"{today}T00:00:00")
+        .lt("created_at", f"{today}T23:59:59.999999")
+        .execute()
+    ).count or 0
+
+    total_searches = (
+        sb.table("usage_log")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .eq("action", "search")
+        .execute()
+    ).count or 0
 
     return {
         "searches_today": searches_today,
