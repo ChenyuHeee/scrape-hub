@@ -40,10 +40,30 @@ class XTwitterScraper(BaseScraper):
         """
         Navigate to X home and verify login state.
 
+        Supports cookie injection for headless/CI environments.
         With persistent browser data, login is typically already saved.
         If not logged in, waits up to 3 minutes for manual login.
-        Works in both CLI (input()) and headless/Streamlit (auto-detect) modes.
         """
+        # Inject cookies if provided (for GitHub Actions / headless mode)
+        cookies = self.config.get("cookies")
+        if cookies:
+            import json as _json
+            if isinstance(cookies, str):
+                cookies = _json.loads(cookies)
+            # Playwright expects cookies with url or domain+path
+            for c in cookies:
+                if "sameSite" in c:
+                    val = c["sameSite"]
+                    if val not in ("Strict", "Lax", "None"):
+                        c["sameSite"] = "Lax"
+                if "url" not in c and "domain" not in c:
+                    c["url"] = "https://x.com"
+                # Remove fields Playwright doesn't accept
+                for key in ["hostOnly", "session", "storeId", "id"]:
+                    c.pop(key, None)
+            page.context.add_cookies(cookies)
+            print(f"✓ 已注入 {len(cookies)} 个 cookies")
+
         page.goto("https://x.com/home", wait_until="domcontentloaded", timeout=30000)
         time.sleep(3)
 

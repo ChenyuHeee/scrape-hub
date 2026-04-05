@@ -33,3 +33,4 @@ Thumbs.db
 *.env
 configs/*.yaml
 !configs/*.example.yaml
+secrets.toml
