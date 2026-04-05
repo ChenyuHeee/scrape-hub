@@ -4,6 +4,8 @@
 
 name: Scrape
 
+run-name: "scrape-${{ inputs.platform }}-${{ inputs.task_id }}"
+
 on:
   workflow_dispatch:
     inputs:

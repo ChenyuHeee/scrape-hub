@@ -187,6 +187,8 @@ def poll_workflow_run(
     run_id = None
 
     # Phase 1: Find the workflow run (may take a few seconds to appear)
+    # The workflow uses run-name: "scrape-{platform}-{task_id}" so we can
+    # match display_title reliably even with concurrent runs.
     while time.time() - start < max_wait:
         elapsed = int(time.time() - start)
         if progress_callback:
@@ -194,17 +196,12 @@ def poll_workflow_run(
 
         status, data = _gh_request(
             "GET",
-            f"/repos/{repo}/actions/workflows/scrape.yml/runs?per_page=5",
+            f"/repos/{repo}/actions/workflows/scrape.yml/runs?per_page=10",
         )
         if status == 200:
             for run in data.get("workflow_runs", []):
-                # Match by checking the run was created recently (within 120s)
-                # and is in 'queued' or 'in_progress' or 'completed' state
-                run_name = run.get("name", "")
-                run_status = run.get("status", "")
-                # We can't match by task_id in run metadata easily,
-                # so we match the most recent run
-                if run_status in ("queued", "in_progress", "completed"):
+                display_title = run.get("display_title", "")
+                if task_id in display_title:
                     run_id = run["id"]
                     break
 
