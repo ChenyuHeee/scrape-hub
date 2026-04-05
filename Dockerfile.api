@@ -1,0 +1,35 @@
+# API Backend Dockerfile — runs FastAPI + Playwright + Chromium
+FROM python:3.12-slim
+
+# Install system dependencies for Playwright Chromium
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
+    libpango-1.0-0 libcairo2 libasound2 libxshmfence1 \
+    fonts-noto-cjk fonts-noto-color-emoji \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir "fastapi>=0.110" "uvicorn[standard]>=0.27"
+
+# Install Playwright and Chromium browser
+RUN playwright install chromium && playwright install-deps chromium
+
+# Copy application code
+COPY . .
+RUN pip install --no-cache-dir -e .
+
+# Create data and browser data directories
+RUN mkdir -p data .browser_data
+
+EXPOSE 8000
+
+HEALTHCHECK CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+CMD ["uvicorn", "scrape_hub.api.server:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000"]

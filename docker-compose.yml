@@ -1,15 +1,34 @@
 services:
-  scrape-hub:
-    build: .
+  # ── API Backend (runs Playwright + Chromium) ──────────────
+  # Deploy this on your own server / VPS
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     ports:
-      - "8501:8501"
+      - "8000:8000"
     volumes:
-      # Persist scraped data and browser sessions across restarts
       - scrape-data:/app/data
       - browser-data:/app/.browser_data
     restart: unless-stopped
     environment:
+      - SCRAPE_HUB_API_SECRET=change-me-to-a-strong-secret
+
+  # ── Streamlit Frontend ────────────────────────────────────
+  # Can also be deployed on Streamlit Cloud instead of self-hosting
+  web:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - scrape-data:/app/data
+    restart: unless-stopped
+    environment:
       - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=50
+      - SCRAPE_HUB_API_URL=http://api:8000
+      - SCRAPE_HUB_API_SECRET=change-me-to-a-strong-secret
+    depends_on:
+      - api
 
 volumes:
   scrape-data:

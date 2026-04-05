@@ -6,10 +6,24 @@ from pathlib import Path
 
 import streamlit as st
 
+from scrape_hub.api.client import get_backend_mode, is_remote_mode, remote_scrape
+from scrape_hub.api.github_backend import github_scrape
+from scrape_hub.commercial.ads import show_banner_ad, show_in_content_ad, show_sidebar_ad
+from scrape_hub.commercial.auth import require_login
+from scrape_hub.commercial.credits import (
+    can_download,
+    can_search,
+    get_preview_limit,
+    log_usage,
+)
+from scrape_hub.commercial.ui import show_upgrade_prompt, show_user_sidebar
 from scrape_hub.core.storage import Storage
 
 st.title("🐦 X / Twitter 推文搜索")
 st.caption("基于 Playwright 的 X 推文自动抓取工具 · 服务器端无头浏览器运行")
+
+require_login()
+show_banner_ad("header")
 
 DATA_DIR = Path("data/x_twitter")
 
@@ -36,13 +50,21 @@ with st.sidebar:
     output_dir = st.text_input("输出目录", value=str(DATA_DIR))
 
     st.divider()
-    st.info(
-        "💡 **X 需要登录态**\n\n"
-        "首次使用请在服务器终端运行：\n"
-        "```\npython -m scrape_hub run x --keywords test\n```\n"
-        "完成一次登录后，会话保存在 `.browser_data/`，\n"
-        "之后即可在 Web 端无头抓取。"
-    )
+    _mode = get_backend_mode()
+    if _mode == "api":
+        st.success("☁️ **远程 API 模式**\n\n通过自建 API 后端执行搜索。")
+    elif _mode == "github":
+        st.success("🐙 **GitHub Actions 模式**\n\n零成本通过 GitHub Actions 执行搜索（约需 2-5 分钟）。")
+    else:
+        st.info(
+            "💡 **本地模式 (Playwright)**\n\n"
+            "X 需要登录态。首次使用请在服务器终端运行：\n"
+            "```\npython -m scrape_hub run x --keywords test\n```\n"
+            "完成一次登录后，会话保存在 `.browser_data/`。"
+        )
+
+show_user_sidebar()
+show_sidebar_ad()
 
 # ── Tabs ────────────────────────────────────────────────────
 
@@ -63,8 +85,18 @@ with tab_scrape:
         with col_b:
             st.metric("关键词", len(keywords))
 
-        if st.button("🚀 开始搜索", type="primary", use_container_width=True):
-            progress_bar = st.progress(0, text="正在启动浏览器...")
+        # ── Search rate limit check ──
+        allowed, search_msg = can_search()
+        if search_msg:
+            st.caption(f"🔍 {search_msg}")
+
+        if st.button("🚀 开始搜索", type="primary", use_container_width=True, disabled=not allowed):
+            if not allowed:
+                show_upgrade_prompt("更多搜索次数")
+                st.stop()
+            log_usage("search", "x_twitter", f"{len(accounts)} accounts, {len(keywords)} keywords")
+
+            progress_bar = st.progress(0, text="正在启动...")
             status_area = st.empty()
             results_area = st.container()
 
@@ -73,44 +105,63 @@ with tab_scrape:
                     min(current / max(total, 1), 1.0), text=message
                 )
 
-            try:
-                from scrape_hub.platforms.x_twitter import XTwitterScraper
+            scrape_config = {
+                "accounts": accounts,
+                "keywords": keywords,
+                "max_scroll": max_scroll,
+                "scroll_pause": scroll_pause,
+            }
 
-                scraper = XTwitterScraper(
-                    config={
-                        "accounts": accounts,
-                        "keywords": keywords,
-                        "max_scroll": max_scroll,
-                        "scroll_pause": scroll_pause,
-                    },
-                    output_dir=output_dir,
-                    headless=True,
-                )
-                results = scraper.run(progress_callback=on_progress)
+            try:
+                mode = get_backend_mode()
+                if mode == "api":
+                    results = remote_scrape(
+                        "x_twitter", scrape_config,
+                        progress_callback=on_progress,
+                    )
+                elif mode == "github":
+                    results = github_scrape(
+                        "x_twitter", scrape_config,
+                        progress_callback=on_progress,
+                    )
+                else:
+                    from scrape_hub.platforms.x_twitter import XTwitterScraper
+
+                    scraper = XTwitterScraper(
+                        config=scrape_config,
+                        output_dir=output_dir,
+                        headless=True,
+                    )
+                    results = scraper.run(progress_callback=on_progress)
 
                 total = sum(len(r.items) for r in results)
                 progress_bar.progress(1.0, text="完成！")
                 status_area.success(f"✅ 搜索完成！共收集 **{total}** 条推文。")
 
+                preview_limit = get_preview_limit()
                 for r in results:
                     if r.items:
+                        show_count = len(r.items) if preview_limit == -1 else min(len(r.items), preview_limit)
                         with results_area.expander(
                             f"{r.query_type}: {r.query_value} ({len(r.items)} 条)"
                         ):
-                            for item in r.items[:10]:
+                            for item in r.items[:show_count]:
                                 st.markdown(f"**{item.get('username', '')}**")
                                 st.write(item.get("text", "")[:300])
                                 if item.get("link"):
                                     st.markdown(f"[原文链接]({item['link']})")
                                 st.divider()
-                            if len(r.items) > 10:
-                                st.caption(f"... 还有 {len(r.items) - 10} 条")
+                            remaining = len(r.items) - show_count
+                            if remaining > 0:
+                                st.caption(f"🔒 还有 {remaining} 条，升级套餐查看全部")
                     elif r.error:
                         results_area.warning(f"{r.query_value}: {r.error}")
 
             except Exception as e:
                 progress_bar.empty()
                 status_area.error(f"❌ 搜索失败: {e}")
+
+show_in_content_ad()
 
 # ── Tab 2: Browse ───────────────────────────────────────────
 
@@ -158,6 +209,14 @@ with tab_browse:
 # ── Tab 3: Download ─────────────────────────────────────────
 
 with tab_download:
+    dl_allowed, dl_msg = can_download()
+
+    if not dl_allowed:
+        show_upgrade_prompt("下载数据")
+    else:
+        if dl_msg:
+            st.caption(f"⬇️ {dl_msg}")
+
     dl_dir = Path(output_dir)
     all_files = sorted(dl_dir.glob("x_twitter_*"), reverse=True) if dl_dir.exists() else []
     if not all_files:
@@ -170,8 +229,12 @@ with tab_download:
             with col2:
                 st.caption(f"{f.stat().st_size / 1024:.1f} KB")
             with col3:
-                mime = "application/json" if f.suffix == ".json" else "text/markdown"
-                st.download_button(
-                    "⬇️", data=f.read_bytes(), file_name=f.name,
-                    mime=mime, key=f"dl_{f.name}",
-                )
+                if dl_allowed:
+                    mime = "application/json" if f.suffix == ".json" else "text/markdown"
+                    if st.download_button(
+                        "⬇️", data=f.read_bytes(), file_name=f.name,
+                        mime=mime, key=f"dl_{f.name}",
+                    ):
+                        log_usage("download", "x_twitter", f.name)
+                else:
+                    st.button("🔒", key=f"dl_locked_{f.name}", disabled=True)

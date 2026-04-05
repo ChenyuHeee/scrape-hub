@@ -83,6 +83,21 @@ def cmd_app(args):
     )
 
 
+def cmd_api(args):
+    """Launch the FastAPI backend server."""
+    port = args.port or 8000
+    print(f"启动 Scrape Hub API 后端 (端口 {port})...")
+    subprocess.run(
+        [
+            sys.executable, "-m", "uvicorn",
+            "scrape_hub.api.server:app",
+            "--host", "0.0.0.0",
+            "--port", str(port),
+        ],
+        check=True,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="scrape-hub",
@@ -105,6 +120,11 @@ def main():
     app_parser = subparsers.add_parser("app", help="启动 Streamlit App")
     app_parser.add_argument("--port", type=int, default=8501, help="端口号")
     app_parser.set_defaults(func=cmd_app)
+
+    # ── api ──────────────────────────────────────────────────
+    api_parser = subparsers.add_parser("api", help="启动 API 后端服务")
+    api_parser.add_argument("--port", type=int, default=8000, help="端口号")
+    api_parser.set_defaults(func=cmd_api)
 
     args = parser.parse_args()
     if not args.command:

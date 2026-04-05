@@ -1,0 +1,102 @@
+# Scrape Hub — GitHub Actions 爬虫工作流
+# 触发方式: workflow_dispatch (由 Streamlit 前端通过 GitHub API 调用)
+# 用途: 零成本替代自建后端，在 GitHub Actions 中运行 Playwright
+
+name: Scrape
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to scrape (x_twitter / wechat)'
+        required: true
+        type: choice
+        options:
+          - x_twitter
+          - wechat
+      config_json:
+        description: 'JSON-encoded scraper config'
+        required: true
+        type: string
+      task_id:
+        description: 'Unique task ID for result retrieval'
+        required: true
+        type: string
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Run scraper
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          CONFIG_JSON: ${{ inputs.config_json }}
+          TASK_ID: ${{ inputs.task_id }}
+        run: |
+          python -c "
+          import json, sys, os
+          from scrape_hub.platforms.x_twitter import XTwitterScraper
+          from scrape_hub.platforms.wechat import WeChatScraper
+
+          platform = os.environ['PLATFORM']
+          config = json.loads(os.environ['CONFIG_JSON'])
+          task_id = os.environ['TASK_ID']
+
+          if platform == 'x_twitter':
+              scraper = XTwitterScraper(config=config, headless=True)
+          elif platform == 'wechat':
+              scraper = WeChatScraper(config=config, headless=True)
+          else:
+              print(f'Unknown platform: {platform}')
+              sys.exit(1)
+
+          results = scraper.run()
+
+          output = {
+              'task_id': task_id,
+              'platform': platform,
+              'results': [
+                  {
+                      'query_type': r.query_type,
+                      'query_value': r.query_value,
+                      'items': r.items,
+                      'collected_at': r.collected_at,
+                      'error': r.error,
+                  }
+                  for r in results
+              ],
+          }
+
+          os.makedirs('_output', exist_ok=True)
+          path = f'_output/{task_id}.json'
+          with open(path, 'w', encoding='utf-8') as f:
+              json.dump(output, ensure_ascii=False, indent=2, fp=f)
+          print(f'Results saved to {path}')
+          total = sum(len(r.items) for r in results)
+          print(f'Total items: {total}')
+          "
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-result-${{ inputs.task_id }}
+          path: _output/${{ inputs.task_id }}.json
+          retention-days: 7
