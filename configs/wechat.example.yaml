@@ -1,0 +1,22 @@
+# WeChat scraper configuration example
+# Copy to wechat.yaml and customize
+
+keywords:
+  - LLM 定价
+  - 大模型 API 价格
+  - token 经济学
+
+accounts:
+  - 量子位
+  - 机器之心
+  - 新智元
+
+# Optional: filter keywords for account fallback search
+account_filter_keywords: "LLM 大模型 AI"
+
+# Scraping parameters
+max_pages: 3
+page_pause: 3.0
+query_delay: 5.0
+debug: false
+locale: zh-CN

@@ -1,0 +1,18 @@
+# X/Twitter scraper configuration example
+# Copy to x_twitter.yaml and customize
+
+accounts:
+  - sama
+  - JensenHuang
+  - ArtificialAnlys
+
+keywords:
+  - LLM pricing
+  - token economics
+  - API cost
+
+# Scraping parameters
+max_scroll: 15
+scroll_pause: 2.5
+query_delay: 5.0
+locale: en-US

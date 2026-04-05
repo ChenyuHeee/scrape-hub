@@ -1,0 +1,35 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Browser data (contains login sessions — do NOT commit)
+.browser_data/
+
+# Scraped data output
+data/
+
+# Debug pages
+_debug/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.env
+configs/*.yaml
+!configs/*.example.yaml
