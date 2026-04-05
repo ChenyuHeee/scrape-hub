@@ -32,19 +32,13 @@ TIERS = {
     },
 }
 
-# ── Ads ─────────────────────────────────────────────────────
+# ── Ads (EthicalAds) ────────────────────────────────────────
 
 ADS_ENABLED = True
 
-# Replace with your Google AdSense publisher ID
-ADSENSE_CLIENT_ID = "ca-pub-XXXXXXXXXXXXXXXX"
-
-# Replace with your ad unit slot IDs
-AD_SLOTS = {
-    "header": "XXXXXXXXXX",
-    "sidebar": "XXXXXXXXXX",
-    "in_content": "XXXXXXXXXX",
-}
+# EthicalAds publisher ID — 审核通过后填入
+# 申请地址: https://www.ethicalads.io/publishers/
+ETHICALADS_PUBLISHER = ""  # e.g. "chenyuheee-scrape-hub"
 
 # ── Payment ─────────────────────────────────────────────────
 
