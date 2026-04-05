@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+.browser_data
+data
+*.egg-info
+dist
+build
+.DS_Store

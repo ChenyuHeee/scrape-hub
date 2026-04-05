@@ -37,16 +37,38 @@ class XTwitterScraper(BaseScraper):
     # ── browser setup ───────────────────────────────────────
 
     def on_browser_ready(self, page) -> None:
-        """Navigate to X home and wait for user to confirm login."""
+        """
+        Navigate to X home and verify login state.
+
+        With persistent browser data, login is typically already saved.
+        If not logged in, waits up to 3 minutes for manual login.
+        Works in both CLI (input()) and headless/Streamlit (auto-detect) modes.
+        """
         page.goto("https://x.com/home", wait_until="domcontentloaded", timeout=30000)
         time.sleep(3)
 
-        print("\n" + "=" * 60)
-        print("浏览器已打开 X 首页")
-        print("请在浏览器中确认已登录（如需登录请先完成登录）")
-        print("=" * 60)
-        input("\n✋ 登录完成后，回到终端按 Enter 键开始搜索...")
-        print("\n✓ 开始搜索！\n")
+        # Auto-detect login state
+        for attempt in range(90):  # max ~3 minutes
+            logged_in = page.evaluate("""
+                () => {
+                    const url = window.location.href;
+                    if (url.includes('/login') || url.includes('/i/flow/login')) return false;
+                    const nav = document.querySelector('nav[role="navigation"]');
+                    const sidebar = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
+                    return !!(nav || sidebar);
+                }
+            """)
+            if logged_in:
+                print("✓ 已检测到 X 登录状态")
+                return
+            if attempt == 0:
+                print("⏳ 等待 X 登录（如使用持久化会话，将自动跳过）...")
+            time.sleep(2)
+
+        raise RuntimeError(
+            "X 登录超时。请先运行一次非无头模式 (headless=False) 完成登录，"
+            "登录态会保存到 .browser_data/ 供后续使用。"
+        )
 
     # ── query building ──────────────────────────────────────
 

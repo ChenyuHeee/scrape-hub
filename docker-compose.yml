@@ -1,0 +1,16 @@
+services:
+  scrape-hub:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      # Persist scraped data and browser sessions across restarts
+      - scrape-data:/app/data
+      - browser-data:/app/.browser_data
+    restart: unless-stopped
+    environment:
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=50
+
+volumes:
+  scrape-data:
+  browser-data:

@@ -65,28 +65,20 @@ def cmd_run(args):
 
 
 def cmd_app(args):
-    """Launch a Streamlit app."""
-    platform = args.platform
-    app_dir = Path(__file__).parent / "apps"
+    """Launch the Streamlit multi-page app."""
+    port = args.port or 8501
+    app_file = Path(__file__).resolve().parent.parent / "app.py"
 
-    app_map = {
-        "x": app_dir / "app_x.py",
-        "x_twitter": app_dir / "app_x.py",
-        "twitter": app_dir / "app_x.py",
-        "wechat": app_dir / "app_wechat.py",
-        "weixin": app_dir / "app_wechat.py",
-    }
-
-    app_file = app_map.get(platform)
-    if not app_file or not app_file.exists():
-        print(f"未找到平台 '{platform}' 的 Streamlit app")
-        print(f"支持的平台: {', '.join(app_map.keys())}")
+    if not app_file.exists():
+        print(f"未找到入口文件: {app_file}")
         sys.exit(1)
 
-    port = args.port or 8501
-    print(f"启动 {platform} Streamlit app (端口 {port})...")
+    print(f"启动 Scrape Hub Streamlit app (端口 {port})...")
     subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", str(app_file), "--server.port", str(port)],
+        [
+            sys.executable, "-m", "streamlit", "run", str(app_file),
+            "--server.port", str(port),
+        ],
         check=True,
     )
 
@@ -111,7 +103,6 @@ def main():
 
     # ── app ──────────────────────────────────────────────────
     app_parser = subparsers.add_parser("app", help="启动 Streamlit App")
-    app_parser.add_argument("platform", help="平台名称 (x / wechat)")
     app_parser.add_argument("--port", type=int, default=8501, help="端口号")
     app_parser.set_defaults(func=cmd_app)
 

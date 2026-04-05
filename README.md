@@ -4,39 +4,51 @@
 
 Scrape Hub provides a unified architecture for building web scrapers with [Playwright](https://playwright.dev/python/) and interactive dashboards with [Streamlit](https://streamlit.io/). Each platform (X/Twitter, WeChat, etc.) is a self-contained adapter that plugs into the core framework.
 
+> ⚠️ **需要自部署**：本项目依赖 Playwright + Chromium，不支持 Streamlit Community Cloud。请使用 Docker 或直接安装。
+
 ## ✨ Features
 
 - **Plugin Architecture** — Add new platforms by subclassing `BaseScraper`
 - **Anti-Detection** — Built-in browser fingerprint spoofing and stealth mode
 - **Persistent Sessions** — Login once, reuse sessions across runs
 - **Dual Output** — Every scrape produces both JSON (for processing) and Markdown (for reading)
-- **Streamlit Apps** — One interactive app per platform with search, browse, and download
+- **Streamlit Multi-Page App** — One page per platform with search, browse, and download
+- **Real-time Progress** — Progress bar and live status updates in the web UI
+- **Docker Ready** — One-command deployment with `docker compose up`
 - **CLI & Python API** — Use from command line or import as a library
 
 ## 📦 Supported Platforms
 
-| Platform | Scraper | Streamlit App | Description |
-|----------|---------|---------------|-------------|
-| X / Twitter | `XTwitterScraper` | `app_x.py` | Search tweets by account & keyword |
-| WeChat (微信公众号) | `WeChatScraper` | `app_wechat.py` | Search articles via Sogou WeChat |
+| Platform | Scraper | Description |
+|----------|---------|-------------|
+| 🐦 X / Twitter | `XTwitterScraper` | Search tweets by account & keyword |
+| 💬 WeChat (微信公众号) | `WeChatScraper` | Search articles via Sogou WeChat |
 
 ## 🚀 Quick Start
 
-### Installation
+### Option 1: Docker (Recommended)
 
 ```bash
-# Clone the repo
-git clone https://github.com/hechenyu/scrape-hub.git
+git clone https://github.com/ChenyuHeee/scrape-hub.git
 cd scrape-hub
 
-# Create virtual environment
+# Build and start
+docker compose up -d
+
+# Open in browser
+open http://localhost:8501
+```
+
+### Option 2: Local Install
+
+```bash
+git clone https://github.com/ChenyuHeee/scrape-hub.git
+cd scrape-hub
+
 python -m venv .venv
-source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
+source .venv/bin/activate
 
-# Install dependencies
 pip install -e .
-
-# Install Playwright browsers (first time only)
 playwright install chromium
 ```
 
@@ -54,17 +66,14 @@ python -m scrape_hub run wechat \
     --accounts "量子位" "机器之心"
 ```
 
-### Streamlit App
+### Streamlit App (Multi-Page)
 
 ```bash
-# Launch X/Twitter app
-python -m scrape_hub app x
+# Launch the multi-page app (includes all platforms)
+python -m scrape_hub app
 
-# Launch WeChat app
-python -m scrape_hub app wechat
-
-# Or directly with streamlit
-streamlit run scrape_hub/apps/app_x.py
+# Or directly
+streamlit run app.py
 ```
 
 ### Python API
@@ -90,20 +99,22 @@ for r in results:
 
 ```
 scrape-hub/
+├── app.py                      # Streamlit entry point (Home page)
+├── pages/                      # Streamlit multi-page pages
+│   ├── 1_X_Twitter.py
+│   └── 2_WeChat.py
 ├── scrape_hub/
 │   ├── core/                   # Core abstractions
-│   │   ├── base_scraper.py     # BaseScraper ABC — extend this for new platforms
+│   │   ├── base_scraper.py     # BaseScraper ABC — extend this
 │   │   ├── browser.py          # Playwright lifecycle + anti-detection
 │   │   └── storage.py          # JSON/Markdown output
 │   ├── platforms/              # Platform adapters
-│   │   ├── x_twitter.py        # X/Twitter implementation
-│   │   └── wechat.py           # WeChat implementation
-│   ├── apps/                   # Streamlit apps
-│   │   ├── app_x.py            # X/Twitter dashboard
-│   │   └── app_wechat.py       # WeChat dashboard
+│   │   ├── x_twitter.py        # X/Twitter scraper
+│   │   └── wechat.py           # WeChat scraper
 │   └── __main__.py             # CLI entry point
+├── Dockerfile                  # Docker deployment
+├── docker-compose.yml
 ├── configs/                    # Configuration examples
-├── data/                       # Default output directory (gitignored)
 └── pyproject.toml
 ```
 
@@ -129,15 +140,16 @@ class MyPlatformScraper(BaseScraper):
         return ScrapeResult(query_type=query_type, query_value=query_value, items=items)
 ```
 
-2. (Optional) Create a Streamlit app in `scrape_hub/apps/app_my_platform.py`
+2. (Optional) Create a Streamlit page in `pages/3_MyPlatform.py`
 
 3. Register in `scrape_hub/platforms/__init__.py` and `__main__.py`
 
 ## 📝 Notes
 
-- **First-time login**: X/Twitter requires manual login in the browser on first run. The session is saved to `.browser_data/` for reuse.
-- **Sogou captcha**: WeChat scraping via Sogou may trigger captchas. The scraper pauses and waits for manual input.
+- **First-time X login**: X/Twitter requires a manual login on first run. Run the CLI once without `--headless`, complete the login, and the session is saved to `.browser_data/` for reuse.
+- **Sogou captcha**: WeChat scraping via Sogou may trigger captchas. In headless mode, the scraper auto-retries; in non-headless mode, it pauses for manual input.
 - **Browser data**: `.browser_data/` contains login sessions and is gitignored. Do not share it.
+- **Docker volumes**: Scraped data and browser sessions persist across container restarts via Docker volumes.
 
 ## 📄 License
 

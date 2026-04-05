@@ -1,30 +1,19 @@
 """
-Streamlit app for WeChat public account article scraping.
-
-Run with:
-    streamlit run scrape_hub/apps/app_wechat.py
+微信公众号文章搜索页面
 """
 
-import json
-from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 
 from scrape_hub.core.storage import Storage
 
-# ── Page config ─────────────────────────────────────────────
-
-try:
-    st.set_page_config(page_title="微信公众号 Scraper", page_icon="💬", layout="wide")
-except st.errors.StreamlitAPIException:
-    pass  # Already set by parent multi-page app
 st.title("💬 微信公众号文章搜索")
-st.caption("基于搜狗微信搜索的公众号文章自动抓取工具 · 服务器端运行")
+st.caption("基于搜狗微信搜索的公众号文章自动抓取工具 · 服务器端无头浏览器运行")
 
 DATA_DIR = Path("data/wechat")
 
-# ── Sidebar: Configuration ──────────────────────────────────
+# ── Sidebar ─────────────────────────────────────────────────
 
 with st.sidebar:
     st.header("⚙️ 搜索配置")
@@ -49,15 +38,13 @@ with st.sidebar:
     debug = st.checkbox("调试模式（保存页面 HTML）", value=False)
     output_dir = st.text_input("输出目录", value=str(DATA_DIR))
 
-# ── Main area ───────────────────────────────────────────────
+# ── Tabs ────────────────────────────────────────────────────
 
 tab_scrape, tab_browse, tab_download = st.tabs(["🔍 搜索", "📋 浏览历史", "⬇️ 下载"])
 
 # ── Tab 1: Scrape ───────────────────────────────────────────
 
 with tab_scrape:
-    st.subheader("启动搜索任务")
-
     keywords = (
         [k.strip() for k in keywords_text.strip().split("\n") if k.strip()]
         if not skip_keywords else []
@@ -81,10 +68,12 @@ with tab_scrape:
         if st.button("🚀 开始搜索", type="primary", use_container_width=True):
             progress_bar = st.progress(0, text="正在启动浏览器...")
             status_area = st.empty()
-            log_container = st.container()
+            results_area = st.container()
 
             def on_progress(current, total, message):
-                progress_bar.progress(current / total, text=message)
+                progress_bar.progress(
+                    min(current / max(total, 1), 1.0), text=message
+                )
 
             try:
                 from scrape_hub.platforms.wechat import WeChatScraper
@@ -108,7 +97,7 @@ with tab_scrape:
 
                 for r in results:
                     if r.items:
-                        with log_container.expander(
+                        with results_area.expander(
                             f"{r.query_type}: {r.query_value} ({len(r.items)} 篇)"
                         ):
                             for item in r.items[:10]:
@@ -125,16 +114,16 @@ with tab_scrape:
                                 st.divider()
                             if len(r.items) > 10:
                                 st.caption(f"... 还有 {len(r.items) - 10} 篇")
+                    elif r.error:
+                        results_area.warning(f"{r.query_value}: {r.error}")
 
             except Exception as e:
                 progress_bar.empty()
                 status_area.error(f"❌ 搜索失败: {e}")
 
-# ── Tab 2: Browse History ───────────────────────────────────
+# ── Tab 2: Browse ───────────────────────────────────────────
 
 with tab_browse:
-    st.subheader("历史搜索结果")
-
     saved_files = Storage.list_saved(output_dir, "wechat")
     if not saved_files:
         st.info("暂无历史数据。请先执行搜索。")
@@ -146,9 +135,8 @@ with tab_browse:
         )
         if selected_file:
             data = Storage.load_json(selected_file)
-
             filter_text = st.text_input("🔎 筛选标题关键词", "")
-            st.write(f"共 {len(data)} 个查询")
+            st.caption(f"共 {len(data)} 个查询")
 
             for group in data:
                 items = group.get("items", [])
@@ -159,7 +147,6 @@ with tab_browse:
                         it for it in items
                         if filter_text.lower() in it.get("title", "").lower()
                     ]
-
                 if not items:
                     continue
 
@@ -180,9 +167,8 @@ with tab_browse:
 # ── Tab 3: Download ─────────────────────────────────────────
 
 with tab_download:
-    st.subheader("下载数据")
-
-    all_files = sorted(Path(output_dir).glob("wechat_*"), reverse=True) if Path(output_dir).exists() else []
+    dl_dir = Path(output_dir)
+    all_files = sorted(dl_dir.glob("wechat_*"), reverse=True) if dl_dir.exists() else []
     if not all_files:
         st.info("暂无可下载的数据。")
     else:
@@ -195,9 +181,6 @@ with tab_download:
             with col3:
                 mime = "application/json" if f.suffix == ".json" else "text/markdown"
                 st.download_button(
-                    "⬇️",
-                    data=f.read_bytes(),
-                    file_name=f.name,
-                    mime=mime,
-                    key=f"dl_{f.name}",
+                    "⬇️", data=f.read_bytes(), file_name=f.name,
+                    mime=mime, key=f"dl_{f.name}",
                 )

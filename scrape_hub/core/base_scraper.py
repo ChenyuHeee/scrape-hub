@@ -76,7 +76,7 @@ class BaseScraper(abc.ABC):
 
     # ── public API ──────────────────────────────────────────
 
-    def run(self, **kwargs) -> list[ScrapeResult]:
+    def run(self, progress_callback=None, **kwargs) -> list[ScrapeResult]:
         """
         Execute the full scraping pipeline:
             1. Launch browser
@@ -85,8 +85,17 @@ class BaseScraper(abc.ABC):
             4. Run each query via search()
             5. Save results
             6. Close browser
+
+        Args:
+            progress_callback: optional callable(current, total, message)
+                               for real-time progress updates (e.g. Streamlit).
         """
         results: list[ScrapeResult] = []
+
+        def _report(cur, tot, msg):
+            print(msg)
+            if progress_callback:
+                progress_callback(cur, tot, msg)
 
         with BrowserManager(
             user_data_dir=self.browser_data_dir,
@@ -102,13 +111,13 @@ class BaseScraper(abc.ABC):
             total = len(queries)
 
             for i, (q_type, q_value) in enumerate(queries, 1):
-                print(f"\n[{i}/{total}] {q_type}: {q_value}")
+                _report(i, total, f"[{i}/{total}] {q_type}: {q_value}")
                 try:
                     result = self.search(q_type, q_value, **kwargs)
                     results.append(result)
-                    print(f"  → 收集 {len(result.items)} 条")
+                    _report(i, total, f"  → 收集 {len(result.items)} 条")
                 except Exception as e:
-                    print(f"  ✗ 失败: {e}")
+                    _report(i, total, f"  ✗ 失败: {e}")
                     results.append(ScrapeResult(
                         query_type=q_type,
                         query_value=q_value,
