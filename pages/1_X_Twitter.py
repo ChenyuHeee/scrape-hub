@@ -138,6 +138,20 @@ with tab_scrape:
                 progress_bar.progress(1.0, text="完成！")
                 status_area.success(f"✅ 搜索完成！共收集 **{total}** 条推文。")
 
+                # Store results in session for download tab
+                import json as _json
+                from datetime import datetime as _dt
+                _result_data = [
+                    {"query_type": r.query_type, "query_value": r.query_value,
+                     "items": r.items, "collected_at": getattr(r, "collected_at", ""),
+                     "error": getattr(r, "error", None)}
+                    for r in results
+                ]
+                _ts = _dt.now().strftime("%Y%m%d_%H%M%S")
+                _fname = f"x_twitter_{_ts}.json"
+                _json_bytes = _json.dumps(_result_data, ensure_ascii=False, indent=2).encode("utf-8")
+                st.session_state["x_last_result"] = {"name": _fname, "data": _json_bytes, "total": total}
+
                 preview_limit = get_preview_limit()
                 for r in results:
                     if r.items:
@@ -217,24 +231,38 @@ with tab_download:
         if dl_msg:
             st.caption(f"⬇️ {dl_msg}")
 
+    # Collect downloadable items from session (remote) + local files
+    _dl_items = []
+
+    # From session state (GitHub Actions / API mode results)
+    if "x_last_result" in st.session_state:
+        r = st.session_state["x_last_result"]
+        _dl_items.append({"name": r["name"], "data": r["data"],
+                          "size": len(r["data"]), "source": "session"})
+
+    # From local files (local mode)
     dl_dir = Path(output_dir)
-    all_files = sorted(dl_dir.glob("x_twitter_*"), reverse=True) if dl_dir.exists() else []
-    if not all_files:
-        st.info("暂无可下载的数据。")
+    if dl_dir.exists():
+        for f in sorted(dl_dir.glob("x_twitter_*"), reverse=True):
+            _dl_items.append({"name": f.name, "data": f.read_bytes(),
+                              "size": f.stat().st_size, "source": "file"})
+
+    if not _dl_items:
+        st.info("暂无可下载的数据。请先执行搜索。")
     else:
-        for f in all_files:
+        for item in _dl_items:
             col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
-                st.write(f.name)
+                st.write(item["name"])
             with col2:
-                st.caption(f"{f.stat().st_size / 1024:.1f} KB")
+                st.caption(f"{item['size'] / 1024:.1f} KB")
             with col3:
                 if dl_allowed:
-                    mime = "application/json" if f.suffix == ".json" else "text/markdown"
+                    mime = "application/json" if item["name"].endswith(".json") else "text/markdown"
                     if st.download_button(
-                        "⬇️", data=f.read_bytes(), file_name=f.name,
-                        mime=mime, key=f"dl_{f.name}",
+                        "⬇️", data=item["data"], file_name=item["name"],
+                        mime=mime, key=f"dl_{item['name']}",
                     ):
-                        log_usage("download", "x_twitter", f.name)
+                        log_usage("download", "x_twitter", item["name"])
                 else:
-                    st.button("🔒", key=f"dl_locked_{f.name}", disabled=True)
+                    st.button("🔒", key=f"dl_locked_{item['name']}", disabled=True)
