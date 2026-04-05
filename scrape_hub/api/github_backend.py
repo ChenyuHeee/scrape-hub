@@ -75,11 +75,18 @@ class ScrapeResult:
 _API = "https://api.github.com"
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Handler that stops on 3xx instead of following redirects."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _gh_request(
     method: str,
     path: str,
     body: dict | None = None,
     accept: str = "application/vnd.github+json",
+    follow_redirects: bool = True,
 ) -> tuple[int, Any]:
     """Make an authenticated GitHub API request. Returns (status, parsed_json_or_bytes)."""
     token = get_gh_token()
@@ -98,7 +105,11 @@ def _gh_request(
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        if follow_redirects:
+            opener = urllib.request.build_opener()
+        else:
+            opener = urllib.request.build_opener(_NoRedirect)
+        with opener.open(req, timeout=60) as resp:
             raw = resp.read()
             status = resp.status
             ct = resp.headers.get("Content-Type", "")
@@ -106,6 +117,10 @@ def _gh_request(
                 return status, json.loads(raw)
             return status, raw
     except urllib.error.HTTPError as e:
+        # 3xx redirects arrive here when follow_redirects=False
+        if e.code in (301, 302, 303, 307, 308):
+            location = e.headers.get("Location", "")
+            return e.code, {"location": location}
         raw = e.read()
         try:
             return e.code, json.loads(raw)
@@ -246,9 +261,23 @@ def download_result(run_id: int, task_id: str) -> list[ScrapeResult]:
     if not artifact_url:
         raise RuntimeError(f"未找到任务 {task_id} 的结果文件")
 
-    # Download the zip
-    status, raw = _gh_request("GET", artifact_url, accept="application/vnd.github+json")
-    if status != 200:
+    # Download the zip — must handle redirect manually because GitHub
+    # redirects to Azure Blob Storage which rejects the Authorization header.
+    status, resp = _gh_request("GET", artifact_url, follow_redirects=False)
+    if status in (301, 302, 303, 307, 308):
+        download_url = resp.get("location", "") if isinstance(resp, dict) else ""
+        if not download_url:
+            raise RuntimeError("Artifact 重定向 URL 为空")
+        # Fetch from the redirect URL WITHOUT auth headers
+        dl_req = urllib.request.Request(download_url, method="GET")
+        try:
+            with urllib.request.urlopen(dl_req, timeout=120) as dl_resp:
+                raw = dl_resp.read()
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"下载 Artifact 失败 ({e.code})")
+    elif status == 200:
+        raw = resp
+    else:
         raise RuntimeError(f"下载 Artifact 失败 ({status})")
 
     # Extract JSON from zip
