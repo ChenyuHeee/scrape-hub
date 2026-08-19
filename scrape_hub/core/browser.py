@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright, BrowserContext, Page
@@ -70,6 +71,7 @@ class BrowserManager:
         viewport: dict | None = None,
         user_agent: str | None = None,
         extra_args: list[str] | None = None,
+        channel: str | None = None,
     ):
         self.user_data_dir = Path(user_data_dir)
         self.headless = headless
@@ -77,6 +79,10 @@ class BrowserManager:
         self.viewport = viewport or {"width": 1280, "height": 900}
         self.user_agent = user_agent or _USER_AGENT
         self.extra_args = extra_args or []
+        # Default: Playwright's bundled Chromium. Set SCRAPE_HUB_BROWSER_CHANNEL
+        # (e.g. "chrome", "msedge") to use a locally installed browser instead
+        # — handy when the Playwright browser download is blocked.
+        self.channel = channel or os.environ.get("SCRAPE_HUB_BROWSER_CHANNEL")
 
         self._pw = None
         self._context: BrowserContext | None = None
@@ -109,6 +115,7 @@ class BrowserManager:
         self._context = self._pw.chromium.launch_persistent_context(
             user_data_dir=str(self.user_data_dir),
             headless=self.headless,
+            channel=self.channel,
             viewport=self.viewport,
             locale=self.locale,
             user_agent=self.user_agent,

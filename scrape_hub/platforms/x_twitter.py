@@ -74,7 +74,9 @@ class XTwitterScraper(BaseScraper):
                     const url = window.location.href;
                     if (url.includes('/login') || url.includes('/i/flow/login')) return false;
                     const nav = document.querySelector('nav[role="navigation"]');
-                    const sidebar = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
+                    const sidebar = document.querySelector(
+                        '[data-testid="SideNav_AccountSwitcher_Button"]'
+                    );
                     return !!(nav || sidebar);
                 }
             """)

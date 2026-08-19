@@ -76,19 +76,20 @@ class BaseScraper(abc.ABC):
 
     # ── public API ──────────────────────────────────────────
 
-    def run(self, progress_callback=None, **kwargs) -> list[ScrapeResult]:
+    def run(self, progress_callback=None, save: bool = True, **kwargs) -> list[ScrapeResult]:
         """
         Execute the full scraping pipeline:
             1. Launch browser
             2. Call on_browser_ready (for login etc.)
             3. Build query list from config
             4. Run each query via search()
-            5. Save results
+            5. Save results (unless save=False)
             6. Close browser
 
         Args:
             progress_callback: optional callable(current, total, message)
-                               for real-time progress updates (e.g. Streamlit).
+                               for real-time progress updates.
+            save: persist results to JSON/Markdown via Storage.
         """
         results: list[ScrapeResult] = []
 
@@ -135,7 +136,7 @@ class BaseScraper(abc.ABC):
         self._browser_manager = None
 
         # Save
-        if any(r.items for r in results):
+        if save and any(r.items for r in results):
             self.save(results)
 
         return results

@@ -4,17 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrape-hub"
-version = "0.1.0"
-description = "A generalized web scraping framework with Streamlit UI — supports X/Twitter, WeChat, and more."
+version = "1.0.0"
+description = "AI-agent-friendly web scraping CLI — multi-engine WeChat article search (Sogou + Bing/Baidu/360), full-content fetching, and X/Twitter search."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "hechenyu"},
 ]
-keywords = ["scraping", "playwright", "streamlit", "twitter", "wechat"]
+keywords = ["scraping", "playwright", "wechat", "weixin", "twitter", "cli", "ai-agent"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -22,14 +23,15 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = [
     "playwright>=1.40",
-    "streamlit>=1.30",
 ]
 
 [project.optional-dependencies]
+yaml = ["pyyaml>=6.0"]
 dev = [
     "pytest>=7.0",
     "ruff>=0.1",
