@@ -210,6 +210,8 @@ class WeChatScraper(BaseScraper):
             lines.append(f"\n> {item['summary']}\n")
         if item.get("content"):
             lines.append("\n" + item["content"] + "\n")
+        elif item.get("content_type") == "images":
+            lines.append(f"\n*（纯图片文章，共 {item.get('image_count', 0)} 张图）*\n")
         if item.get("link"):
             lines.append(f"\n[阅读原文]({item['link']})\n")
 

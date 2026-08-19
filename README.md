@@ -81,6 +81,39 @@ python -m scrape_hub wechat fetch --accounts 量子位 机器之心 --keywords �
 python -m scrape_hub wechat fetch --urls https://mp.weixin.qq.com/s/xxxx --metadata-only
 ```
 
+> 纯图片文章（正文只有图片没有文字）会被标记为 `content_type: images`，
+> 输出 `image_count` 与 `image_urls`（图片直链），不会误报为空正文。
+
+### 监控公众号新文章（`wechat watch`，基于微信读书）
+
+"不知道文章 URL，只想知道某个号有没有发新文章"——这是搜索引擎路线做不到的
+（搜狗收录不全且滞后，实测部分文章发布数月后仍搜不到）。`watch` 走微信读书路线：
+微信读书把公众号当"书"实时同步，`bookId = MP_WXS_ + base64解码(文章里的 __biz)`，
+而 `__biz` 就写在任意一篇该号文章的 URL/页面里——**无需搜索、无需猜 URL**。
+
+```bash
+# 1) 扫码登录微信读书（一次性，会话保存在 .browser_data/weread）
+python -m scrape_hub wechat watch login --headed
+#   无图形界面时: watch login（无 --headed）会把二维码截图存到 data/wechat_watch/login_qr.png
+
+# 2) 订阅：给任意一篇该号的文章链接（或 __biz、bookId）即可
+python -m scrape_hub wechat watch add "https://mp.weixin.qq.com/s/MIhB6vF8BQrL9b3cOoITsA"
+
+# 3) 检查新文章（对比上次基线，只报告新增）
+python -m scrape_hub wechat watch check --all                 # 检查书架全部
+python -m scrape_hub wechat watch check MzYzOTQ1NTEyNQ==      # 按 __biz
+python -m scrape_hub wechat watch check --all --fetch-content # 新文章同时抓正文
+python -m scrape_hub wechat watch check --all --interval 600  # 每 10 分钟轮询
+
+# 4) 查看已订阅列表
+python -m scrape_hub wechat watch list
+```
+
+> ⚠️ 微信读书路线的已知限制：① 部分公众号的同步滞后（通常晚几小时，个别号更久）；
+> ② 需要微信扫码登录一次，登录失效后需重扫；③ 偶尔弹腾讯验证码（`--headed`
+> 运行时手动点掉）；④ 有风控限频，请勿高频轮询（建议间隔 ≥ 10 分钟）。
+> 与 `fetch` 组合：`fetch` 一篇文章拿到 `biz` → `watch add <biz>` 开始监控。
+
 ### 检索引擎对比
 
 | 引擎 | 原理 | 收录 | 时效 | 验证码 | 登录 |
@@ -123,8 +156,9 @@ scrape-hub/
 │   └── platforms/
 │       ├── wechat/               # 微信公众号（多引擎）
 │       │   ├── scraper.py        #   编排：多引擎合并去重 → 链接解析 → 正文增强
-│       │   ├── article.py        #   跳转链接解析 + mp.weixin.qq.com 全文提取
+│       │   ├── article.py        #   跳转链接解析 + mp.weixin.qq.com 全文提取（含纯图片文章）
 │       │   ├── fetcher.py        #   wechat fetch：链接列表 → 正文批处理
+│       │   ├── weread.py         #   wechat watch：微信读书接口，公众号新文章监控
 │       │   └── backends/         #   检索后端（新增引擎只需实现 WeChatBackend）
 │       │       ├── sogou.py      #   搜狗微信
 │       │       └── metasearch.py #   Bing/Baidu/360 site: 检索
@@ -158,14 +192,12 @@ class MyEngine(WeChatBackend):
 
 ## 🗺️ 其他可选路线（Roadmap）
 
-- **微信读书接口**（账号维度的最新文章列表，实时）：参考
-  [wewe-rss](https://github.com/cooderl/wewe-rss) / [wechat2rss](https://github.com/ttttmr/wechat2rss)；
-  需要微信读书扫码登录，可作为新的 backend。
-- **微信客户端「搜一搜」**（微信内全量索引、实时）：Windows 桌面自动化方案，
+- **微信客户端「搜一搜」**（微信内全量索引、实时，无需微信读书）：Windows 桌面自动化方案，
   参考 [wechat-soss-scraper](https://github.com/tony-eya/wechat-soss-scraper)；
-  最全但脆弱，依赖微信版本与 UI 模板。
+  最全但脆弱，依赖微信版本与 UI 模板。可作为 `watch` 的第二个数据源。
 - **微信公众平台官方后台接口**（需要公众号管理员账号，仅能查自己的素材）：
   参考 [wechat_mp](https://github.com/RogerLiNing/wechat_mp)。
+- **商业数据服务**：新榜、西瓜数据等（付费 API）。
 - **商业数据服务**：新榜、西瓜数据等（付费 API）。
 
 ## 📝 注意事项

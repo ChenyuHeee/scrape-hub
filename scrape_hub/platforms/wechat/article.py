@@ -275,7 +275,32 @@ def fetch_article(
             )
             item["content"] = content.strip()
             item["content_length"] = len(item["content"])
-            if not item["content"] and not item.get("title"):
+
+            # Image-only articles have no text body. Detect them and collect
+            # the image URLs instead of silently returning empty content.
+            if not item["content"]:
+                imgs = page.evaluate(
+                    """
+                    () => {
+                        const el = document.querySelector('#js_content')
+                            || document.querySelector('.rich_media_content');
+                        if (!el) return [];
+                        return Array.from(el.querySelectorAll('img'))
+                            .map(i => i.getAttribute('data-src') || i.getAttribute('src') || '')
+                            .filter(u => u && u.indexOf('data:image') !== 0);
+                    }
+                    """
+                )
+                if imgs:
+                    item["content_type"] = "images"
+                    item["image_count"] = len(imgs)
+                    item["image_urls"] = imgs[:50]
+
+            if (
+                not item["content"]
+                and not item.get("image_count")
+                and not item.get("title")
+            ):
                 item["error"] = "页面未包含文章正文（可能需要验证或内容已删除）"
                 return item
 

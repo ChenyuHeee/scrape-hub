@@ -90,6 +90,12 @@ class ArticleFetcher:
                 lines.append("  |  ".join(meta) + "\n")
             if item.get("content"):
                 lines.append("\n" + item["content"] + "\n")
+            elif item.get("content_type") == "images":
+                lines.append(
+                    f"\n*（纯图片文章，共 {item.get('image_count', 0)} 张图）*\n"
+                )
+                for u in item.get("image_urls", []):
+                    lines.append(f"![image]({u})\n")
             lines.append(f"\n[原文链接]({item.get('url', '')})\n\n---\n")
         md_path.write_text("\n".join(lines), encoding="utf-8")
         print(f"✓ Markdown 已保存: {md_path}")
