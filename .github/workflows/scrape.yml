@@ -1,6 +1,8 @@
-# Scrape Hub — GitHub Actions 爬虫工作流
-# 触发方式: workflow_dispatch (由 Streamlit 前端通过 GitHub API 调用)
-# 用途: 零成本替代自建后端，在 GitHub Actions 中运行 Playwright
+# Scrape Hub — 云端抓取工作流（可选）
+# 在 GitHub Actions 里运行 Playwright，本机无需装浏览器：
+#   gh workflow run scrape.yml -f platform=wechat -f config_json='{"keywords":["大模型"],"engines":["metasearch"]}'
+#   gh run list --workflow=scrape.yml   # 查看运行
+# 注意: Actions 出口 IP 可能触发搜狗验证码，默认建议只用 metasearch 引擎。
 
 name: Scrape
 
@@ -10,12 +12,12 @@ on:
   workflow_dispatch:
     inputs:
       platform:
-        description: 'Platform to scrape (x_twitter / wechat)'
+        description: 'Platform to scrape (wechat / x_twitter)'
         required: true
         type: choice
         options:
-          - x_twitter
           - wechat
+          - x_twitter
       config_json:
         description: 'JSON-encoded scraper config'
         required: true
@@ -28,7 +30,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -54,24 +56,23 @@ jobs:
           TASK_ID: ${{ inputs.task_id }}
         run: |
           python -c "
-          import json, sys, os
-          from scrape_hub.platforms.x_twitter import XTwitterScraper
-          from scrape_hub.platforms.wechat import WeChatScraper
+          import json, os, sys
+          from scrape_hub.core.base_scraper import BaseScraper
 
           platform = os.environ['PLATFORM']
           config = json.loads(os.environ['CONFIG_JSON'])
           task_id = os.environ['TASK_ID']
 
-          if platform == 'x_twitter':
-              scraper = XTwitterScraper(config=config, headless=True)
-          elif platform == 'wechat':
+          if platform == 'wechat':
+              from scrape_hub.platforms.wechat import WeChatScraper
               scraper = WeChatScraper(config=config, headless=True)
+          elif platform == 'x_twitter':
+              from scrape_hub.platforms.x_twitter import XTwitterScraper
+              scraper = XTwitterScraper(config=config, headless=True)
           else:
-              print(f'Unknown platform: {platform}')
-              sys.exit(1)
+              print(f'Unknown platform: {platform}'); sys.exit(1)
 
           results = scraper.run()
-
           output = {
               'task_id': task_id,
               'platform': platform,
@@ -86,14 +87,12 @@ jobs:
                   for r in results
               ],
           }
-
           os.makedirs('_output', exist_ok=True)
           path = f'_output/{task_id}.json'
           with open(path, 'w', encoding='utf-8') as f:
               json.dump(output, ensure_ascii=False, indent=2, fp=f)
           print(f'Results saved to {path}')
-          total = sum(len(r.items) for r in results)
-          print(f'Total items: {total}')
+          print(f'Total items: {sum(len(r.items) for r in results)}')
           "
 
       - name: Upload results

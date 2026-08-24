@@ -1,5 +1,6 @@
 # WeChat scraper configuration example
-# Copy to wechat.yaml and customize
+# 用法: python -m scrape_hub wechat search --config configs/wechat.yaml
+#       python -m scrape_hub wechat search --config wechat.yaml --engine sogou
 
 keywords:
   - LLM 定价
@@ -9,14 +10,30 @@ keywords:
 accounts:
   - 量子位
   - 机器之心
-  - 新智元
 
-# Optional: filter keywords for account fallback search
-account_filter_keywords: "LLM 大模型 AI"
+# ── 检索引擎 ──────────────────────────────────────────────
+# metasearch: Bing/Baidu/360 的 site:mp.weixin.qq.com 检索（免登录、收录新、无验证码）
+# sogou:      搜狗微信（专用索引，收录不全且滞后，易触发验证码，适合兜底/公众号查找）
+# 多个引擎时按顺序依次执行并合并去重
+engines:
+  - metasearch
+  - sogou
 
-# Scraping parameters
-max_pages: 3
-page_pause: 3.0
-query_delay: 5.0
+# metasearch 使用的子引擎
+metasearch_engines:
+  - bing
+  - baidu
+  - so360
+
+# ── 抓取参数 ──────────────────────────────────────────────
+max_pages: 3                # 搜狗每关键词最大翻页数
+max_results_per_engine: 10  # 每引擎每查询最大结果数
+page_pause: 2.5             # 页面加载等待（秒）
+query_delay: 4.0            # 查询间隔（秒）
+
+# ── 增强选项 ──────────────────────────────────────────────
+resolve_links: true         # 把跳转链接解析为 mp.weixin.qq.com 原文链接
+fetch_content: false        # 是否抓取每篇文章完整正文（慢；公众号查询时会校验真实来源）
+
 debug: false
 locale: zh-CN
